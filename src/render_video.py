@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 INPUT = ROOT / "input" / "video.mp4"
 TEMP = ROOT / "output" / "_video_no_audio.mp4"
 OUTPUT = ROOT / "output" / "final.mp4"
+CAPTIONS = ROOT / "output" / "captions.ass"
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 
 def segment(frame):
@@ -79,11 +80,41 @@ def render_video():
     if rc: raise SystemExit(f"Video encoder failed: {rc}")
 
 def mux_audio():
-    af="highpass=f=70,lowpass=f=14500,acompressor=threshold=-20dB:ratio=2.5:attack=8:release=100:makeup=2,loudnorm=I=-15:TP=-1.5:LRA=9"
-    subprocess.run([FFMPEG,"-y","-i",str(TEMP),"-i",str(INPUT),"-map","0:v:0","-map","1:a:0","-vf","setsar=1","-af",af,"-c:v","copy","-c:a","aac","-b:a","192k","-ar","48000","-shortest","-movflags","+faststart",str(OUTPUT)],check=True)
+    af = (
+        "highpass=f=70,lowpass=f=14500,"
+        "acompressor=threshold=-20dB:ratio=2.5:attack=8:release=100:makeup=2,"
+        "loudnorm=I=-15:TP=-1.5:LRA=9"
+    )
+    # Keep the final deliverable social-ready at 1080x1920 and burn in the
+    # Armenian captions generated from the actual speech when available.
+    vf = (
+        "scale=1080:1920:force_original_aspect_ratio=increase,"
+        "crop=1080:1920,"
+        "setsar=1,"
+        "eq=contrast=1.025:brightness=0.008:saturation=1.035,"
+        "unsharp=5:5:0.35:5:5:0"
+    )
+    if CAPTIONS.exists():
+        subtitle = CAPTIONS.resolve().as_posix().replace(":", r"\\:")
+        subtitle = subtitle.replace("'", r"\\'")
+        vf += f",subtitles='{subtitle}'"
+    vf += ",format=yuv420p"
+    subprocess.run([
+        FFMPEG, "-y",
+        "-i", str(TEMP),
+        "-i", str(INPUT),
+        "-map", "0:v:0",
+        "-map", "1:a:0",
+        "-vf", vf,
+        "-af", af,
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-crf", "20",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-ar", "48000",
+        "-shortest",
+        "-movflags", "+faststart",
+        str(OUTPUT)
+    ], check=True)
 
-if __name__=="__main__":
-    if not INPUT.exists(): raise SystemExit(f"Missing {INPUT}")
-    render_video()
-    mux_audio()
-    print(f"FINAL: {OUTPUT}")
