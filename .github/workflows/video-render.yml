@@ -1,0 +1,37 @@
+name: Render KrtLab video
+
+on:
+  workflow_dispatch:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system tools
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg python3-opencv
+
+      - name: Install Python dependencies
+        run: python3 -m pip install --upgrade pip numpy
+
+      - name: Check input
+        run: |
+          test -f input/video.mp4
+          ffprobe -v error -show_entries format=duration,size -of default=nw=1 input/video.mp4
+
+      - name: Render
+        run: python3 src/render_video.py
+
+      - name: Inspect result
+        run: |
+          test -f output/final.mp4
+          ffprobe -v error -show_entries stream=codec_name,width,height,r_frame_rate -show_entries format=duration,size -of default=nw=1 output/final.mp4
+
+      - name: Upload final video
+        uses: actions/upload-artifact@v4
+        with:
+          name: krtlab-final-video
+          path: output/final.mp4
+          retention-days: 1
