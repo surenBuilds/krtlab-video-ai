@@ -1,16 +1,19 @@
-"""Final studio render: use locally generated studio_video.mp4 and make a social-ready 9:16 master."""
+"""Final studio render: preserve the generated background replacement and restore original audio."""
 from pathlib import Path
 import imageio_ffmpeg
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUT = ROOT / "output" / "studio_video.mp4"
+VIDEO = ROOT / "output" / "studio_video.mp4"
+AUDIO_SOURCE = ROOT / "input" / "video.mp4"
 OUTPUT = ROOT / "output" / "final.mp4"
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 
 def main():
-    if not INPUT.exists():
-        raise SystemExit(f"Missing {INPUT}. Run fast_background.py first.")
+    if not VIDEO.exists():
+        raise SystemExit(f"Missing {VIDEO}. Run fast_background.py first.")
+    if not AUDIO_SOURCE.exists():
+        raise SystemExit(f"Missing {AUDIO_SOURCE}.")
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 
@@ -29,14 +32,20 @@ def main():
     )
 
     cmd = [
-        FFMPEG, "-y", "-i", str(INPUT),
-        "-vf", vf, "-af", af,
-        "-map", "0:v:0", "-map", "0:a?",
+        FFMPEG, "-y",
+        "-i", str(VIDEO),
+        "-i", str(AUDIO_SOURCE),
+        "-vf", vf,
+        "-af", af,
+        "-map", "0:v:0",
+        "-map", "1:a:0",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-        "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart",
+        "-c:a", "aac", "-b:a", "192k",
+        "-shortest",
+        "-movflags", "+faststart",
         str(OUTPUT)
     ]
-    print("Rendering final KrtLab studio master...")
+    print("Rendering final KrtLab studio master with original speech...")
     subprocess.run(cmd, check=True)
     print(f"Created: {OUTPUT}")
 
